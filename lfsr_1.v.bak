@@ -1,0 +1,11 @@
+module lfsr_1(input CLOCK_50,
+					input [3:0]KEY,
+					output [6:0]HEX0);
+					
+	wire [3:0]ran_num;
+	
+	lfsr my_lfsr(.clk(CLOCK_50), .rst(KEY[3]), .en_seed(KEY[0]), .ran_num(ran_num));
+	
+	seven_segment my_ss(.data(ran_num), .hex_out(HEX0));
+
+endmodule

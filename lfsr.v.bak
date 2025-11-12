@@ -1,0 +1,27 @@
+module lfsr_1(clk,rst,en_seed,ran_num);
+	input clk, rst, en_seed;
+	output reg [3:0]ran_num;
+
+	reg [3:0]seed;
+	assign en_seed = KEY[0];
+	
+	seven_segment my_ss(ran_num, HEX0);
+	
+	always @(posedge clk or negedge rst)
+	begin
+		if(rst==1'b0)
+		begin
+			ran_num <= 4'd0;
+			seed <= 4'b0001;
+		end
+		else
+		begin
+			if (en_seed == 1'b1)
+			begin
+				ran_num <= {seed[2:0], seed[3] ^ seed[0]};
+			end
+		end
+	end
+endmodule
+			
+	
