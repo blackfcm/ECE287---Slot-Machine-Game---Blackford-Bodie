@@ -1,13 +1,14 @@
-module lfsr_1(input CLOCK_50,
+module lfsr_1(input clk,
+					input rst,
 					input [3:0]KEY,
-					output [6:0]HEX0);
-					
-	wire [3:0]ran_num;
-	wire slow_clk;
+					output [6:0]HEX0,
+					output [3:0]lfsr_out);
 	
-	slow_clock clk_div(.clk_in(CLOCK_50), .clk_out(slow_clk));
-	
-	lfsr my_lfsr(.clk(slow_clk), .rst(KEY[3]), .en_seed(KEY[0]), .ran_num(ran_num));
-	
-	seven_segment my_ss(.i(ran_num), .o(HEX0));
+	wire lfsr_clk;
+	assign lfsr_clk = KEY[0];
+
+lfsr my_lfsr(lfsr_out,lfsr_clk,rst);
+
+seven_segment my_ss_lfsr(lfsr_out,HEX0);
+
 endmodule

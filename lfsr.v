@@ -1,22 +1,13 @@
-module lfsr(clk,rst,en_seed,ran_num);
-	input clk, rst, en_seed;
-	output reg [3:0]ran_num;
-
+module lfsr(out,clk,rst);
+	input clk, rst;
+	output reg [3:0]out;
 	
-	always @(posedge clk or negedge rst)
-	begin
-		if(rst==1'b0)
-		begin
-			ran_num <= 4'b0111;
-		end
-		else
-		begin
-			if (en_seed == 1'b0)
-			begin
-				ran_num <= {ran_num[2:0], ran_num[3] ^ ran_num[2]};
-			end
-		end
+	always @ (posedge clk or negedge rst)
+	begin	
+		if (rst == 1'b0)
+			out = 4'b0101;
+		else 
+			out = {out[2:0], ~(out[3] ^ out[2])};
 	end
-endmodule
-			
 	
+endmodule
