@@ -134,53 +134,97 @@ end
 
 reg [23:0] vga_color;
 
+localparam SPRITE_W = 128;
+localparam SPRITE_H = 128;
 
-localparam integer BOX_COUNT = 3;      // number of boxes (set to 3 for your request)
-localparam integer BOX_W    = 100;   // width of each box in pixels
-localparam integer BOX_H    = 80;    // height of each box in pixels
-localparam integer SPACING  = 40;    // pixels between the two boxes
-localparam integer CENTER_X = 320;   // assumed center X of active area
-localparam integer CENTER_Y = 240;   // assumed center Y of active area
-
-localparam integer TOTAL_W = BOX_COUNT*BOX_W + (BOX_COUNT-1)*SPACING;
-localparam integer LEFT_X  = CENTER_X - (TOTAL_W/2);
-localparam integer Y0       = CENTER_Y - (BOX_H/2);
-localparam integer Y1       = Y0 + BOX_H - 1;
-
-// desired color for the boxes (24-bit: R[23:16], G[15:8], B[7:0])
-localparam [23:0] BOX_COLOR0 = 24'hD2042D; // cherry red
-localparam [23:0] BOX_COLOR2 = 24'hA2B06D; // leafy green
-localparam [23:0] BOX_COLOR3 = 24'h5CA904; // darker forest green
+// === Cherry sprite parameters === (middle)
+localparam CHERRY_X = 320 - (SPRITE_W/2);  // centered on screen
+localparam CHERRY_Y = 240 - (SPRITE_H/2);
+// Diamond parameter (left)
+localparam DIAMOND_X = CHERRY_X - 160;
+// Seven parameter (right)
+localparam SEVEN_X = CHERRY_X + 160;
 
 
 
+wire cherry_inside;
+wire [23:0] cherry_pixel;
+wire [23:0] diamond_pixel;
+wire [23:0] seven_pixel;
 
+reg  [13:0] cherry_addr;
+reg  [13:0] diamond_addr;
+reg  [13:0] seven_addr;
+
+
+cherry_rom cherry_image (
+    .clk(clk),
+    .addr(cherry_addr),
+    .pixel(cherry_pixel)
+);
+
+diamond_rom diamond_image (
+    .clk(clk),
+    .addr(diamond_addr),
+    .pixel(diamond_pixel)
+);
+
+seven_rom seven_image (
+    .clk(clk),
+    .addr(seven_addr),
+    .pixel(seven_pixel)
+);
+
+
+	 
 integer i;
 integer sx;
 integer ex;
+integer sy;
 
-always @(*)
 
-	begin
-		vga_color = 24'hFFFFFF;
-		
-			// draw boxes only when in active pixel region
-	if (active_pixels) begin
-		// for each box compute its start/end and check if current x,y inside
-		for (i = 0; i < BOX_COUNT; i = i + 1) begin
-			sx = LEFT_X + i * (BOX_W + SPACING);
-			ex = sx + BOX_W - 1;
-			if ((x >= sx) && (x <= ex) && (y >= Y0) && (y <= Y1)) begin
-			case(i)
-				0:vga_color = BOX_COLOR0;
-				1:vga_color = BOX_COLOR2;
-				2:vga_color = BOX_COLOR3;
-				default: vga_color = 24'h000000;
-			endcase
+always @(*) begin
+    vga_color = 24'hFFFFFF;   // background white
+    cherry_addr  = 0;
+    diamond_addr = 0;
+    seven_addr   = 0;
 
-				
-			end
-		end
-	end
+    if (active_pixels) begin
+
+        // === CHERRY (center) ===
+        if (x >= CHERRY_X && x < CHERRY_X + SPRITE_W &&
+            y >= CHERRY_Y && y < CHERRY_Y + SPRITE_H) begin
+
+            cherry_addr = (y - CHERRY_Y) * SPRITE_W +
+                          (x - CHERRY_X);
+            vga_color = cherry_pixel;
+
+        end 
+
+        // === DIAMOND (left) ===
+        else if (x >= DIAMOND_X && x < DIAMOND_X + SPRITE_W &&
+                 y >= CHERRY_Y && y < CHERRY_Y + SPRITE_H) begin
+
+            diamond_addr = (y - CHERRY_Y) * SPRITE_W +
+                           (x - DIAMOND_X);
+            vga_color = diamond_pixel;
+
+        end 
+
+        // === SEVEN (right) ===
+        else if (x >= SEVEN_X && x < SEVEN_X + SPRITE_W &&
+                 y >= CHERRY_Y && y < CHERRY_Y + SPRITE_H) begin
+
+            seven_addr = (y - CHERRY_Y) * SPRITE_W +
+                         (x - SEVEN_X);
+            vga_color = seven_pixel;
+
+        end
+    end
 end
-endmodule 	
+
+	 
+
+
+
+endmodule 
