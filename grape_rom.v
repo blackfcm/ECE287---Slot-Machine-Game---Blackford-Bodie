@@ -1,4 +1,4 @@
-module seven_rom(
+module grape_rom(
     input  wire        clk,
     input  wire [13:0] addr,
     output reg  [23:0] pixel   // 24-bit RGB
@@ -6,7 +6,7 @@ module seven_rom(
     reg [23:0] mem [0:16383];  
 
     initial begin
-        $readmemh("seven_128x128.mem", mem);
+        $readmemh("grapes_128x128.mem", mem);
     end
 
     always @(posedge clk) begin

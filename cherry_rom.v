@@ -3,7 +3,7 @@ module cherry_rom(
     input  wire [13:0] addr,
     output reg  [23:0] pixel   // 24-bit RGB
 );
-    reg [23:0] mem [0:16383];  // Example 32×32 image
+    reg [23:0] mem [0:16383];  
 
     initial begin
         $readmemh("cherry_128.mem", mem);

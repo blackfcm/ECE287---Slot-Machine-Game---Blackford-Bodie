@@ -138,12 +138,12 @@ localparam SPRITE_W = 128;
 localparam SPRITE_H = 128;
 
 // === Cherry sprite parameters === (middle)
-localparam CHERRY_X = 320 - (SPRITE_W/2);  // centered on screen
-localparam CHERRY_Y = 240 - (SPRITE_H/2);
+localparam CENTER_X = 320 - (SPRITE_W/2);  // centered on screen
+localparam CENTER_Y = 240 - (SPRITE_H/2);
 // Diamond parameter (left)
-localparam DIAMOND_X = CHERRY_X - 160;
+localparam LEFT_X = CENTER_X - 160;
 // Seven parameter (right)
-localparam SEVEN_X = CHERRY_X + 160;
+localparam RIGHT_X = CENTER_X + 160;
 
 
 
@@ -151,10 +151,22 @@ wire cherry_inside;
 wire [23:0] cherry_pixel;
 wire [23:0] diamond_pixel;
 wire [23:0] seven_pixel;
+wire [23:0] orange_pixel;
+wire [23:0] grape_pixel;
+wire [23:0] bell_pixel;
+wire [23:0] clover_pixel;
+wire [23:0] watermelon_pixel;
+wire [23:0] bar_pixel;
 
 reg  [13:0] cherry_addr;
 reg  [13:0] diamond_addr;
 reg  [13:0] seven_addr;
+reg [13:0] orange_addr;
+reg [13:0] grape_addr;
+reg [13:0] bell_addr;
+reg [13:0] clover_addr;
+reg [13:0] watermelon_addr;
+reg [13:0] bar_addr;
 
 
 cherry_rom cherry_image (
@@ -175,6 +187,17 @@ seven_rom seven_image (
     .pixel(seven_pixel)
 );
 
+orange_rom orange_image(clk,orange_addr,orange_pixel);
+
+grape_rom grape_image(clk,grape_addr,grape_pixel);
+
+bell_rom bell_image(clk,bell_addr,bell_pixel);
+
+clover_rom clover_image(clk,clover_addr, clover_pixel);
+
+watermelon_rom watermelon_image(clk, watermelon_addr, watermelon_pixel);
+
+bar_rom bar_image (clk, bar_addr, bar_pixel);
 
 	 
 integer i;
@@ -184,40 +207,40 @@ integer sy;
 
 
 always @(*) begin
-    vga_color = 24'hFFFFFF;   // background white
+    vga_color = 24'h000000;   // background black
     cherry_addr  = 0;
     diamond_addr = 0;
     seven_addr   = 0;
 
     if (active_pixels) begin
 
-        // === CHERRY (center) ===
-        if (x >= CHERRY_X && x < CHERRY_X + SPRITE_W &&
-            y >= CHERRY_Y && y < CHERRY_Y + SPRITE_H) begin
+        // CENTER
+        if (x >= CENTER_X && x < CENTER_X + SPRITE_W &&
+            y >= CENTER_Y && y < CENTER_Y + SPRITE_H) begin
 
-            cherry_addr = (y - CHERRY_Y) * SPRITE_W +
-                          (x - CHERRY_X);
-            vga_color = cherry_pixel;
+            bar_addr = (y - CENTER_Y) * SPRITE_W +
+                          (x - CENTER_X);
+            vga_color = bar_pixel;
 
         end 
 
-        // === DIAMOND (left) ===
-        else if (x >= DIAMOND_X && x < DIAMOND_X + SPRITE_W &&
-                 y >= CHERRY_Y && y < CHERRY_Y + SPRITE_H) begin
+        // LEFT
+        else if (x >= LEFT_X && x < LEFT_X + SPRITE_W &&
+                 y >= CENTER_Y && y < CENTER_Y + SPRITE_H) begin
 
-            diamond_addr = (y - CHERRY_Y) * SPRITE_W +
-                           (x - DIAMOND_X);
-            vga_color = diamond_pixel;
+            clover_addr = (y - CENTER_Y) * SPRITE_W +
+                           (x - LEFT_X);
+            vga_color = clover_pixel;
 
         end 
 
         // === SEVEN (right) ===
-        else if (x >= SEVEN_X && x < SEVEN_X + SPRITE_W &&
-                 y >= CHERRY_Y && y < CHERRY_Y + SPRITE_H) begin
+        else if (x >= RIGHT_X && x < RIGHT_X + SPRITE_W &&
+                 y >= CENTER_Y && y < CENTER_Y + SPRITE_H) begin
 
-            seven_addr = (y - CHERRY_Y) * SPRITE_W +
-                         (x - SEVEN_X);
-            vga_color = seven_pixel;
+            watermelon_addr = (y - CENTER_Y) * SPRITE_W +
+                         (x - RIGHT_X);
+            vga_color = watermelon_pixel;
 
         end
     end
