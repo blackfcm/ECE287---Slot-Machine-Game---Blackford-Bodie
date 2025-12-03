@@ -104,6 +104,7 @@ wire rst;
 
 assign clk = CLOCK_50;
 assign rst = SW[0];
+assign slot_rst = SW[1];
 
 assign LEDR[0] = active_pixels;
 //assign LEDR[1] = flag;
@@ -126,128 +127,187 @@ vga_driver the_vga(
 .VGA_SYNC_N(VGA_SYNC_N)
 );
 
-always @(*)
-begin
+always @(*) begin
 	{VGA_R, VGA_G, VGA_B} = vga_color;
 end
-
 
 reg [23:0] vga_color;
 
 localparam SPRITE_W = 128;
 localparam SPRITE_H = 128;
-
-// === Cherry sprite parameters === (middle)
-localparam CENTER_X = 320 - (SPRITE_W/2);  // centered on screen
+localparam CENTER_X = 320 - (SPRITE_W/2);
 localparam CENTER_Y = 240 - (SPRITE_H/2);
-// Diamond parameter (left)
-localparam LEFT_X = CENTER_X - 160;
-// Seven parameter (right)
-localparam RIGHT_X = CENTER_X + 160;
+localparam LEFT_X   = CENTER_X - 160;
+localparam RIGHT_X  = CENTER_X + 160;
+localparam NUM_SPRITES = 8;
+
+//Title Parameters
+localparam CHAR_W = 8;
+localparam CHAR_H = 8;
+
+localparam TITLE_SCALE = 3;
+localparam TITLE_W = CHAR_W * TITLE_SCALE;
+localparam TITLE_H = CHAR_H * TITLE_SCALE;
+
+localparam TITLE_LEN = 14;
+localparam TITLE_PIX_W = TITLE_LEN * TITLE_W;
+localparam TITLE_X = (640 - TITLE_PIX_W) / 2;
+localparam TITLE_Y = (CENTER_Y / 2) - (TITLE_H / 2);
+
+wire [23:0] sprite_pixel;
+wire [7:0] font_pixel;
+
+reg [16:0] sprite_addr;
+reg [7:0] font_ascii;
+reg [3:0] font_row;
 
 
+// TITLE TEXT
+reg [7:0] title_text [0:13];  // 14 letters
 
-wire cherry_inside;
-wire [23:0] cherry_pixel;
-wire [23:0] diamond_pixel;
-wire [23:0] seven_pixel;
-wire [23:0] orange_pixel;
-wire [23:0] grape_pixel;
-wire [23:0] bell_pixel;
-wire [23:0] clover_pixel;
-wire [23:0] watermelon_pixel;
-wire [23:0] bar_pixel;
+// LFSR reg
+reg [3:0]center_symbol;
+reg [7:0] lfsr = 8'hAF;
 
-reg  [13:0] cherry_addr;
-reg  [13:0] diamond_addr;
-reg  [13:0] seven_addr;
-reg [13:0] orange_addr;
-reg [13:0] grape_addr;
-reg [13:0] bell_addr;
-reg [13:0] clover_addr;
-reg [13:0] watermelon_addr;
-reg [13:0] bar_addr;
+always @(posedge clk or negedge rst)
+begin
+	if (rst == 1'b0)
+		lfsr <= 8'hA5;
+	else 
+		lfsr <= {lfsr[6:0], lfsr[7]^lfsr[5]};
+end
 
+reg key0_prev;
 
-cherry_rom cherry_image (
-    .clk(clk),
-    .addr(cherry_addr),
-    .pixel(cherry_pixel)
-);
+always @(posedge clk or negedge rst) begin
+    if (!rst) begin
+        key0_prev   <= 1'b1;
+        idx_center  <= 0;
+        idx_left    <= 1;
+        idx_right   <= 2;
+    end else begin
+        key0_prev <= KEY[0];
 
-diamond_rom diamond_image (
-    .clk(clk),
-    .addr(diamond_addr),
-    .pixel(diamond_pixel)
-);
-
-seven_rom seven_image (
-    .clk(clk),
-    .addr(seven_addr),
-    .pixel(seven_pixel)
-);
-
-orange_rom orange_image(clk,orange_addr,orange_pixel);
-
-grape_rom grape_image(clk,grape_addr,grape_pixel);
-
-bell_rom bell_image(clk,bell_addr,bell_pixel);
-
-clover_rom clover_image(clk,clover_addr, clover_pixel);
-
-watermelon_rom watermelon_image(clk, watermelon_addr, watermelon_pixel);
-
-bar_rom bar_image (clk, bar_addr, bar_pixel);
-
-	 
-integer i;
-integer sx;
-integer ex;
-integer sy;
-
-
-always @(*) begin
-    vga_color = 24'h000000;   // background black
-    cherry_addr  = 0;
-    diamond_addr = 0;
-    seven_addr   = 0;
-
-    if (active_pixels) begin
-
-        // CENTER
-        if (x >= CENTER_X && x < CENTER_X + SPRITE_W &&
-            y >= CENTER_Y && y < CENTER_Y + SPRITE_H) begin
-
-            bar_addr = (y - CENTER_Y) * SPRITE_W +
-                          (x - CENTER_X);
-            vga_color = bar_pixel;
-
-        end 
-
-        // LEFT
-        else if (x >= LEFT_X && x < LEFT_X + SPRITE_W &&
-                 y >= CENTER_Y && y < CENTER_Y + SPRITE_H) begin
-
-            clover_addr = (y - CENTER_Y) * SPRITE_W +
-                           (x - LEFT_X);
-            vga_color = clover_pixel;
-
-        end 
-
-        // === SEVEN (right) ===
-        else if (x >= RIGHT_X && x < RIGHT_X + SPRITE_W &&
-                 y >= CENTER_Y && y < CENTER_Y + SPRITE_H) begin
-
-            watermelon_addr = (y - CENTER_Y) * SPRITE_W +
-                         (x - RIGHT_X);
-            vga_color = watermelon_pixel;
-
+        // Detect falling edge: KEY goes 1 -> 0
+        if (key0_prev && !KEY[0]) begin
+            // Generate 3 random symbols
+            idx_center <= lfsr[3:0] % NUM_SPRITES;
+            idx_left   <= (lfsr[3:0] ^ 4'h3) % NUM_SPRITES;
+            idx_right  <= (lfsr[3:0] ^ 4'h7) % NUM_SPRITES;
         end
     end
 end
 
-	 
 
 
+initial begin
+    title_text[0]  = "F";
+    title_text[1]  = "o";
+    title_text[2]  = "r";
+    title_text[3]  = "t";
+    title_text[4]  = "u";
+    title_text[5]  = "n";
+    title_text[6]  = "e";
+    title_text[7]  = " ";
+    title_text[8]  = "F";
+    title_text[9]  = "r";
+    title_text[10] = "e";
+    title_text[11] = "n";
+    title_text[12] = "z";
+    title_text[13] = "y";
+end
 
-endmodule 
+
+sprites_rom icons(clk,sprite_addr, sprite_pixel);
+title_rom title(clk, font_ascii, font_row, font_pixel);
+
+reg [3:0] slot_pos;
+reg [23:0] spin_cnt;
+reg spinning;
+
+reg [7:0] char_index;
+reg [2:0] char_x;
+reg [2:0] char_y;
+
+reg [3:0] idx_left, idx_center, idx_right;
+reg [16:0] addr_left, addr_center, addr_right;
+
+
+always @(*) begin
+    vga_color = 24'h000000;
+    sprite_addr = 17'h0;
+	 font_ascii = 8'h00;
+	 font_row = 4'h0;
+
+    // DEFAULT assignments for *all* combinational regs:
+    addr_center = 0;
+    addr_left   = 0;
+    addr_right  = 0;
+    char_index  = 0;
+    char_x      = 0;
+    char_y      = 0;
+	
+	if (active_pixels)
+	begin
+    // CENTER
+         if (x >= CENTER_X && x < CENTER_X + SPRITE_W &&
+				 y >= CENTER_Y && y < CENTER_Y + SPRITE_H) begin
+				 
+					  addr_center = idx_center * SPRITE_W * SPRITE_H +
+										 (y - CENTER_Y) * SPRITE_W +
+										 (x - CENTER_X);
+					  sprite_addr = addr_center;
+					  vga_color   = sprite_pixel;
+				 end
+			
+
+          // LEFT
+          else if (x >= LEFT_X && x < LEFT_X + SPRITE_W &&
+                   y >= CENTER_Y && y < CENTER_Y + SPRITE_H) begin
+
+                  addr_left  = idx_left * SPRITE_W * SPRITE_H +
+                               (y - CENTER_Y) * SPRITE_W +
+                               (x - LEFT_X);
+                  sprite_addr = addr_left;
+                  vga_color   = sprite_pixel;
+              end
+
+    
+
+          // RIGHT
+          else if (x >= RIGHT_X && x < RIGHT_X + SPRITE_W &&
+                   y >= CENTER_Y && y < CENTER_Y + SPRITE_H) begin
+
+                  addr_right = idx_right * SPRITE_W * SPRITE_H +
+                               (y - CENTER_Y) * SPRITE_W +
+                               (x - RIGHT_X);
+                  sprite_addr = addr_right;
+                  vga_color   = sprite_pixel;
+              end
+
+      
+
+          // TITLE
+          else if (x >= TITLE_X && x < TITLE_X + TITLE_PIX_W &&
+                   y >= TITLE_Y && y < TITLE_Y + TITLE_H) begin
+
+              char_index = (x - TITLE_X) / TITLE_W;
+              char_x     = ((x - TITLE_X) % TITLE_W) / TITLE_SCALE;
+              char_y     = ((y - TITLE_Y) % TITLE_H) / TITLE_SCALE;
+
+              // protect out-of-range read (in case of timing)
+              if (char_index < TITLE_LEN) begin
+                  font_ascii = title_text[char_index];
+              end else begin
+                  font_ascii = 8'h20; // space
+              end
+
+              font_row = char_y[2:0];
+
+              if (font_pixel[7 - char_x])
+                  vga_color = 24'hFFFFFF; // white text
+          end
+      end
+end
+
+endmodule
