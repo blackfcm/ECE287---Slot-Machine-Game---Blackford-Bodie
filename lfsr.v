@@ -1,13 +1,16 @@
-module lfsr(out,clk,rst);
-	input clk, rst;
-	output reg [3:0]out;
-	
-	always @ (posedge clk or negedge rst)
-	begin	
-		if (rst == 1'b0)
-			out = 4'b0101;
-		else 
-			out = {out[2:0], ~(out[3] ^ out[2])};
-	end
-	
+module lfsr (
+    input  wire clk,
+    input  wire rst,
+    output reg  [7:0] rnd
+);
+
+    wire feedback = rnd[7] ^ rnd[5] ^ rnd[4] ^ rnd[3];
+
+    always @(posedge clk or negedge rst) begin
+        if (!rst)
+            rnd <= 8'hA5;       
+        else
+            rnd <= {rnd[6:0], feedback};
+    end
+
 endmodule

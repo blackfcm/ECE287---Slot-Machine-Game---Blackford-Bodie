@@ -1,13 +1,13 @@
 module weighted_picker_fsm (
     input  wire        clk,
-    input  wire        rst_n,    // active-low reset
-    input  wire        start,    // pulse starts selection
+    input  wire        rst_n,    
+    input  wire        start,    
     input  wire [7:0]  rnd_in,
     output reg  [3:0]  sym_out,
     output reg         done
 );
 
-    // state encoding
+    
     localparam S_IDLE  = 2'd0;
     localparam S_CHECK = 2'd1;
     localparam S_DONE  = 2'd2;
@@ -22,11 +22,11 @@ module weighted_picker_fsm (
             sym_out <= 4'd0;
             done    <= 1'b0;
         end else begin
-            done <= 1'b0;  // default every cycle except S_DONE
+            done <= 1'b0; 
 
             case (state)
 
-                // ---------------------------------------------------------
+                
                 S_IDLE: begin
                     if (start) begin
                         rnd_reg <= rnd_in;
@@ -34,25 +34,25 @@ module weighted_picker_fsm (
                     end
                 end
 
-                // ---------------------------------------------------------
+                
                 S_CHECK: begin
-                    // final weight ranges
-                    if      (rnd_reg <= 8'd29)   sym_out <= 4'd0; // clover
-                    else if (rnd_reg <= 8'd72)   sym_out <= 4'd1; // watermelon
-                    else if (rnd_reg <= 8'd91)   sym_out <= 4'd2; // bell
-                    else if (rnd_reg <= 8'd110)  sym_out <= 4'd3; // bar
-                    else if (rnd_reg <= 8'd153)  sym_out <= 4'd4; // cherry
-                    else if (rnd_reg <= 8'd183)  sym_out <= 4'd5; // diamond
-                    else if (rnd_reg <= 8'd213)  sym_out <= 4'd6; // seven
+                    // Weights
+                    if      (rnd_reg <= 8'd32)   sym_out <= 4'd0; // clover
+                    else if (rnd_reg <= 8'd64)   sym_out <= 4'd1; // watermelon
+                    else if (rnd_reg <= 8'd96)   sym_out <= 4'd2; // bell
+                    else if (rnd_reg <= 8'd128)  sym_out <= 4'd3; // bar
+                    else if (rnd_reg <= 8'd160)  sym_out <= 4'd4; // cherry
+                    else if (rnd_reg <= 8'd192)  sym_out <= 4'd5; // diamond
+                    else if (rnd_reg <= 8'd224)  sym_out <= 4'd6; // seven
                     else                         sym_out <= 4'd7; // orange
 
                     state <= S_DONE;
                 end
 
-                // ---------------------------------------------------------
+                    
                 S_DONE: begin
-                    done  <= 1'b1;   // 1-cycle pulse
-                    state <= S_IDLE; // return to idle automatically
+                    done  <= 1'b1;   
+                    state <= S_IDLE; 
                 end
 
             endcase
