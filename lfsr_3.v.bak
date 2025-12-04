@@ -1,11 +1,11 @@
-module lfsr_1 (
+module lfsr_3 (
     input  wire clk,
     input  wire rst,
 	 input wire seed, 
     output reg  [7:0] rnd
 );
 
-    wire feedback = rnd[7] ^ rnd[5] ^ rnd[4] ^ rnd[3];
+    wire feedback = rnd[7] ^ rnd[5] ^ rnd[4] ^ rnd[0];
 
     always @(posedge clk or posedge rst) begin
         if (rst)

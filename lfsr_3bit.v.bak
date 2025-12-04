@@ -1,0 +1,27 @@
+module lfsr_3bit (
+    input  wire clk,
+    input  wire rst,
+    input  wire enable,     // pulse once per slot advance
+    output reg  [2:0] rnd   // random 3-bit output
+);
+
+    reg [2:0] lfsr_reg;
+    wire feedback;
+
+    // Polynomial: x^3 + x + 1  (taps at bit2 and bit0)
+    assign feedback = lfsr_reg[2] ^ lfsr_reg[0];
+
+    always @(posedge clk or negedge rst) begin
+        if (!rst) begin
+            lfsr_reg <= 3'b001;   // never zero! LFSR dies at zero.
+        end else if (enable) begin
+            // shift left, feed new bit into LSB
+            lfsr_reg <= {lfsr_reg[1:0], feedback};
+        end
+    end
+
+    always @(*) begin
+        rnd = lfsr_reg;   // output is the current LFSR state
+    end
+
+endmodule

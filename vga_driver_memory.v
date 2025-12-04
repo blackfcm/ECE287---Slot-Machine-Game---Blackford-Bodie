@@ -165,39 +165,155 @@ reg [3:0] font_row;
 // TITLE TEXT
 reg [7:0] title_text [0:13];  // 14 letters
 
-// LFSR reg
+// LFSR and Spinning Functions
 reg [3:0]center_symbol;
-reg [7:0] lfsr = 8'hAF;
+reg spinning;
+reg [23:0] spin_counter;
 
-always @(posedge clk or negedge rst)
-begin
-	if (rst == 1'b0)
-		lfsr <= 8'hA5;
-	else 
-		lfsr <= {lfsr[6:0], lfsr[7]^lfsr[5]};
-end
-
-reg key0_prev;
+//---------------------------------------------------------
+// Slow clock divider and edge-pulse generator for reels
+//---------------------------------------------------------
+reg [22:0] div;                 // widen for slower ticks if you want
+reg prev_div15, prev_div16, prev_div17;
+reg tickA_pulse_reg, tickB_pulse_reg, tickC_pulse_reg;
 
 always @(posedge clk or negedge rst) begin
     if (!rst) begin
-        key0_prev   <= 1'b1;
-        idx_center  <= 0;
-        idx_left    <= 1;
-        idx_right   <= 2;
+        div <= 0;
+        prev_div15 <= 0;
+        prev_div16 <= 0;
+        prev_div17 <= 0;
+        tickA_pulse_reg <= 0;
+        tickB_pulse_reg <= 0;
+        tickC_pulse_reg <= 0;
     end else begin
-        key0_prev <= KEY[0];
+        div <= div + 1'b1;
 
-        // Detect falling edge: KEY goes 1 -> 0
-        if (key0_prev && !KEY[0]) begin
-            // Generate 3 random symbols
-            idx_center <= lfsr[3:0] % NUM_SPRITES;
-            idx_left   <= (lfsr[3:0] ^ 4'h3) % NUM_SPRITES;
-            idx_right  <= (lfsr[3:0] ^ 4'h7) % NUM_SPRITES;
-        end
+        // detect rising edges of the chosen bits
+        prev_div15 <= div[20];  // choose slower bits (20..22) for nicer speed
+        prev_div16 <= div[21];
+        prev_div17 <= div[22];
+
+        tickA_pulse_reg <= div[20] & ~prev_div15; // single-cycle pulse when bit 20 rises
+        tickB_pulse_reg <= div[21] & ~prev_div16; // single-cycle pulse when bit 21 rises
+        tickC_pulse_reg <= div[22] & ~prev_div17; // single-cycle pulse when bit 22 rises
     end
 end
 
+// Active-high single-cycle pulses to use in logic
+wire tickA_pulse = tickA_pulse_reg;
+wire tickB_pulse = tickB_pulse_reg;
+wire tickC_pulse = tickC_pulse_reg;
+
+// optional: route pulses to LEDs for debugging (can remove later)
+assign LEDR[1] = tickA_pulse | 1'b0;
+assign LEDR[2] = tickB_pulse | 1'b0;
+assign LEDR[3] = tickC_pulse | 1'b0;
+
+
+wire [7:0] rnd_left; 
+wire [7:0] rnd_center;
+wire [7:0] rnd_right;
+
+reg  [3:0] idx_left, idx_center, idx_right;  // final displayed symbols
+
+reg key0_prev;
+
+reg [7:0] stop_counter;
+localparam MAX_TICKS = 8'd20; // number of center ticks before auto-stop
+
+always @(posedge clk or negedge rst) begin
+    if (!rst) begin
+        key0_prev    <= 1;
+        idx_center   <= 0;
+        idx_left     <= 1;
+        idx_right    <= 2;
+        spinning     <= 0;
+        stop_counter <= 0;
+
+        start_left_pick   <= 0;
+        start_center_pick <= 0;
+        start_right_pick  <= 0;
+    end 
+    else begin
+        // ------------------------------------------------
+        // 1) DEFAULT — these must be zero every clock
+        // ------------------------------------------------
+        start_left_pick   <= 0;
+        start_center_pick <= 0;
+        start_right_pick  <= 0;
+
+        // ------------------------------------------------
+        // 2) CAPTURE KEY edge
+        // ------------------------------------------------
+        key0_prev <= KEY[0];
+
+        if (key0_prev && !KEY[0]) begin
+            spinning     <= 1;
+            stop_counter <= 0;
+        end
+
+        // ------------------------------------------------
+        // 3) REEL SPINNING ANIMATION (your original logic)
+        // ------------------------------------------------
+        if (spinning) begin
+            if (tickA_pulse)
+                idx_left <= rnd_left[2:0];
+
+            if (tickB_pulse)
+                idx_center <= rnd_center[2:0];
+
+            if (tickC_pulse)
+                idx_right <= rnd_right[2:0];
+        end
+			//---------------------------------------------------------
+			// 3B) EARLY STOP WHEN ALL THREE ALIGN
+			//---------------------------------------------------------
+			//if (spinning) begin
+			//	 if ((idx_left == idx_center) && (idx_center == idx_right)) begin
+				//	  spinning <= 0;        // stop immediately
+				 //end
+			//end
+        // ------------------------------------------------
+        // 4) STOP COUNTER ADVANCE
+        // ------------------------------------------------
+        if (spinning && tickB_pulse)
+            stop_counter <= stop_counter + 1;
+
+        // ------------------------------------------------
+        // 5) TRIGGER WEIGHTED PICKS (clean version)
+        // ------------------------------------------------
+        if (spinning && tickB_pulse) begin
+            if (stop_counter == MAX_TICKS - 3)
+                start_left_pick <= 1;
+
+            if (stop_counter == MAX_TICKS - 2)
+                start_center_pick <= 1;
+
+            if (stop_counter == MAX_TICKS - 1)
+                start_right_pick <= 1;
+        end
+
+        // ------------------------------------------------
+        // 6) LOCK THE FINAL WEIGHTED SYMBOLS
+        // ------------------------------------------------
+        if (done_left)
+            idx_left <= sym_left;
+
+        if (done_center)
+            idx_center <= sym_center;
+
+        if (done_right)
+            idx_right <= sym_right;
+
+        // ------------------------------------------------
+        // 7) STOP SPINNING
+        // ------------------------------------------------
+        if (stop_counter >= MAX_TICKS)
+            spinning <= 0;
+
+    end
+end
 
 
 initial begin
@@ -221,16 +337,29 @@ end
 sprites_rom icons(clk,sprite_addr, sprite_pixel);
 title_rom title(clk, font_ascii, font_row, font_pixel);
 
+lfsr_1 left(clk,rst, rnd_left);
+lfsr_2 center(clk,rst, rnd_center);
+lfsr_3 right(clk,rst, rnd_right);
+
+wire [3:0] sym_left, sym_center, sym_right;
+wire done_left, done_center, done_right;
+
+reg start_left_pick, start_center_pick, start_right_pick;
+
+weighted_picker_fsm w_left(clk,rst,start_left_pick,rnd_left,sym_left,done_left);
+weighted_picker_fsm w_center(clk,rst,start_center_pick,rnd_center,sym_center,done_center);
+weighted_picker_fsm w_right(clk,rst,start_right_pick,rnd_right,sym_right,done_right);
+
 reg [3:0] slot_pos;
 reg [23:0] spin_cnt;
-reg spinning;
+
 
 reg [7:0] char_index;
 reg [2:0] char_x;
 reg [2:0] char_y;
 
-reg [3:0] idx_left, idx_center, idx_right;
 reg [16:0] addr_left, addr_center, addr_right;
+
 
 
 always @(*) begin

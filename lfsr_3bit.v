@@ -1,16 +1,17 @@
 module lfsr_1 (
     input  wire clk,
-    input  wire rst,
+    input  wire rst, 
     output reg  [7:0] rnd
 );
 
     wire feedback = rnd[7] ^ rnd[5] ^ rnd[4] ^ rnd[3];
 
-    always @(posedge clk or negedge rst) begin
-        if (!rst)
+    always @(posedge clk or posedge rst) begin
+        if (rst)
             rnd <= 8'hA5;       // non-zero seed (you can change)
         else
             rnd <= {rnd[6:0], feedback};
     end
 
 endmodule
+

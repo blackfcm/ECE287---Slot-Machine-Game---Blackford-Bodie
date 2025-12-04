@@ -1,4 +1,4 @@
-module lfsr_1 (
+module lfsr_3 (
     input  wire clk,
     input  wire rst,
     output reg  [7:0] rnd

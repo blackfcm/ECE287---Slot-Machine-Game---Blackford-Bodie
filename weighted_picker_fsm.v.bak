@@ -1,0 +1,100 @@
+module weighted_picker_fsm(
+    input  wire        clk,
+    input  wire        rst,
+    input  wire        start,       // pulse to begin picking
+    input  wire [7:0]  rnd_in,      // LFSR input
+    output reg  [3:0]  sym_out,     // final symbol
+    output reg         done         // high when symbol is ready
+);
+
+    // FSM States
+    typedef enum reg [1:0] {
+        S_IDLE  = 2'd0,
+        S_CHECK = 2'd1,
+        S_DONE  = 2'd2
+    } state_t;
+
+    state_t state, next_state;
+
+    reg [7:0] rnd_reg;
+
+    //-------------------------------------
+    // 1) State register
+    //-------------------------------------
+    always @(posedge clk or posedge rst) begin
+        if (rst)
+            state <= S_IDLE;
+        else
+            state <= next_state;
+    end
+
+    //-------------------------------------
+    // 2) Next-state logic
+    //-------------------------------------
+    always @(*) begin
+        case (state)
+            S_IDLE:
+                if (start) next_state = S_CHECK;
+                else       next_state = S_IDLE;
+
+            S_CHECK:
+                next_state = S_DONE;
+
+            S_DONE:
+                next_state = S_IDLE;
+
+            default:
+                next_state = S_IDLE;
+        endcase
+    end
+
+    //-------------------------------------
+    // 3) Output logic (Moore outputs)
+    //-------------------------------------
+    always @(posedge clk or posedge rst) begin
+        if (rst) begin
+            done    <= 0;
+            sym_out <= 0;
+            rnd_reg <= 0;
+        end 
+        else begin
+            case (state)
+                S_IDLE: begin
+                    done <= 0;
+                    if (start)
+                        rnd_reg <= rnd_in;   // latch the random value
+                end
+
+                // Weighted selection happens here
+                S_CHECK: begin
+                    // 50% group (0–149)
+                    if (rnd_reg < 8'd50)
+                        sym_out <= 4'd1;       // watermelon
+                    else if (rnd_reg < 8'd100)
+                        sym_out <= 4'd7;       // orange
+                    else if (rnd_reg < 8'd150)
+                        sym_out <= 4'd4;       // cherry
+
+                    // 35% group (150–249)
+                    else if (rnd_reg < 8'd185)
+                        sym_out <= 4'd0;       // clover
+                    else if (rnd_reg < 8'd220)
+                        sym_out <= 4'd5;       // diamond
+                    else if (rnd_reg < 8'd250)
+                        sym_out <= 4'd6;       // seven
+
+                    // 15% group (250–255)
+                    else if (rnd_reg < 8'd253)
+                        sym_out <= 4'd2;       // bell
+                    else
+                        sym_out <= 4'd3;       // bar
+                end
+
+                S_DONE: begin
+                    done <= 1;
+                end
+            endcase
+        end
+    end
+
+endmodule
