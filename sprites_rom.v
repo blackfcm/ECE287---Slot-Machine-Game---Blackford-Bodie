@@ -4,7 +4,7 @@ module sprites_rom(
     output reg [23:0] pixel  // 24-bit color output
 );
 
-    reg [23:0] memory_array [0:131071];
+    reg [23:0] memory_array [0:131072];
 	 integer  offset;
 	 localparam CLOVER_SIZE = 128*128;
 	 localparam WATERMELON_SIZE = 128*128;
@@ -18,7 +18,7 @@ module sprites_rom(
 
 initial begin
     offset = 0;
-    $readmemh("clover_128x128.mem",    memory_array, offset); 
+    $readmemh("clover.mem",    memory_array, offset); 
     offset = offset + CLOVER_SIZE;
 
     $readmemh("watermelon_128x128.mem", memory_array, offset);
@@ -33,10 +33,10 @@ initial begin
     $readmemh("cherry_128.mem",         memory_array, offset);
     offset = offset + CHERRY_SIZE;
 
-    $readmemh("diamond_fixed_24bit.mem", memory_array, offset);
+    $readmemh("diamond_128.mem", memory_array, offset);
     offset = offset + DIAMOND_SIZE;
 
-    $readmemh("seven_128x128.mem",      memory_array, offset);
+    $readmemh("seven_128.mem",      memory_array, offset);
     offset = offset + SEVEN_SIZE;
 
     $readmemh("orange_128.mem",         memory_array, offset);

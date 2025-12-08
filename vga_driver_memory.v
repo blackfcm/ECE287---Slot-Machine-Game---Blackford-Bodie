@@ -220,110 +220,95 @@ wire [7:0] rnd_center;
 wire [7:0] rnd_right;
 
 reg  [3:0] idx_left, idx_center, idx_right;  
+reg [16:0] addr_left, addr_center, addr_right;
 
 reg key0_prev;
-reg key1_prev;
 
 reg [7:0] stop_counter;
 localparam MAX_TICKS = 8'd20; 
+localparam S_IDLE = 0,
+           S_SPIN = 1,
+           S_EVAL = 2;
+
+reg [1:0] spin_state;
 
 
 // LFSR AND SPINNING LOGIC
 
 always @(posedge clk or negedge rst) begin
     if (!rst) begin
-        key0_prev    <= 1;
-        idx_center   <= 0;
-        idx_left     <= 1;
-        idx_right    <= 2;
-        spinning     <= 0;
+        spin_state  <= S_IDLE;
+        spinning    <= 0;
+        win_flag    <= 0;
         stop_counter <= 0;
-
-        start_left_pick   <= 0;
-        start_center_pick <= 0;
-        start_right_pick  <= 0;
-    end 
+        key0_prev   <= 1;
+		  idx_left <= rnd_left[2:0];
+		  idx_center <= rnd_center[5:3];
+		  idx_right <= rnd_right[7:5];
+		  
+    end
     else begin
-        
-        start_left_pick   <= 0;
-        start_center_pick <= 0;
-        start_right_pick  <= 0;
-
-        
         key0_prev <= KEY[0];
 
-        if (key0_prev && !KEY[0]) begin
-            spinning     <= 1;
-            stop_counter <= 0;
-				win_flag <= 0;
-        end
+        case (spin_state)
 
-       
-        // SLOT SPINNING 
-       
-        if (spinning) begin
-            if (tickA_pulse)
-                idx_left <= rnd_left[2:0];
+            //----------------------------------------------------
+            //  IDLE: nothing spinning, waiting for user input
+            //----------------------------------------------------
+            S_IDLE: begin
+                win_flag <= 0;
 
-            if (tickB_pulse)
-                idx_center <= rnd_center[2:0];
+                if (key0_prev && !KEY[0]) begin
+                    spinning     <= 1;
+                    stop_counter <= 0;
+                    spin_state   <= S_SPIN;
+                end
+            end
 
-            if (tickC_pulse)
-                idx_right <= rnd_right[2:0];
-        end
-			
-			// EARLY STOP WHEN ALL THREE ALIGN (IF NEEDED TO DEMO)
-			
-			if (spinning) begin
-				if ((idx_left == idx_center) && (idx_center == idx_right)) begin
-					  spinning <=  0;        // stop immediately
-				 end
-			end
-       
-        // STOP COUNTER
-       
-        if (spinning && tickB_pulse)
-            stop_counter <= stop_counter + 1;
 
-        
-        // ENABLE WEIGHTED PICKS 
-       
-        if (spinning && tickB_pulse) begin
-            if (stop_counter == MAX_TICKS - 3)
-                start_left_pick <= 1;
+            //----------------------------------------------------
+            //  SPIN: reels spin, counters advance
+            //----------------------------------------------------
+            S_SPIN: begin
 
-            if (stop_counter == MAX_TICKS - 2)
-                start_center_pick <= 1;
+                // same spinning logic you already have
+                if (tickA_pulse) idx_left   <= rnd_left[2:0];
+                if (tickB_pulse) idx_center <= rnd_center[2:0];
+                if (tickC_pulse) idx_right  <= rnd_right[2:0];
 
-            if (stop_counter == MAX_TICKS - 1)
-                start_right_pick <= 1;
-        end
+                if (tickB_pulse)
+                    stop_counter <= stop_counter + 1;
 
-       
-        // LOCK THE FINAL WEIGHTED SYMBOLS
-       
-        if (done_left)
-            idx_left <= sym_left;
+                if (stop_counter >= MAX_TICKS) begin
+                    spinning   <= 0;
+                    spin_state <= S_EVAL;
+                end
+            end
 
-        if (done_center)
-            idx_center <= sym_center;
 
-        if (done_right)
-            idx_right <= sym_right;
+            //----------------------------------------------------
+            //  EVAL: spinning has stopped → check for win ONCE
+            //----------------------------------------------------
+            S_EVAL: begin
+                // Evaluate ONCE — not continuously
+                if ((idx_left == idx_center) && (idx_center == idx_right))
+                    win_flag <= 1;
+                else
+                    win_flag <= 0;
 
-        
-        // STOP SPINNING
-       
-        if (stop_counter >= MAX_TICKS)
-            spinning <= 0;
-				
-				if((idx_left == idx_center) && (idx_center == idx_right))
-					win_flag <= 1;
-				else 
-					win_flag <= 0;
+                // Wait for next spin request
+                if (key0_prev && !KEY[0]) begin
+                    stop_counter <= 0;
+                    win_flag     <= 0;
+                    spinning     <= 1;
+                    spin_state   <= S_SPIN;
+                end
+            end
 
+        endcase
     end
 end
+
 
 
 // TITLE TEXTS
@@ -359,14 +344,10 @@ end
 
 // DRAWING and INSTATION REGs and WIREs
 
-wire [3:0] sym_left, sym_center, sym_right;
-wire done_left, done_center, done_right;
 
-reg start_left_pick, start_center_pick, start_right_pick;
 reg [7:0] char_index;
 reg [2:0] char_x;
 reg [2:0] char_y;
-reg [16:0] addr_left, addr_center, addr_right;
 
 
 // BET AND PAYOUT
@@ -375,7 +356,7 @@ reg [6:0] bet_amount;
 localparam BET_LEN = 7;
 localparam BET_X   = 20;
 localparam BET_Y   = 420;
-localparam PAY_LEN = 7;
+localparam PAY_LEN = 8;
 localparam PAY_X   = 640 - (PAY_LEN * TITLE_W) - 20;
 localparam PAY_Y   = 420;
 
@@ -392,27 +373,80 @@ end
 
 assign key1_falling = key1_prev_reg & ~KEY[1];
 
+reg key2_prev_reg;
+wire key2_falling;
+
+always @(posedge clk or negedge rst) begin
+    if (!rst)
+        key2_prev_reg <= 1;
+    else
+        key2_prev_reg <= KEY[2];
+end
+
+assign key2_falling = key2_prev_reg & ~KEY[2];  // Detect falling edge
+
+
+
 always @(posedge clk or negedge rst) begin
     if (!rst)
         bet_amount <= 7'd1;
-    else if (key1_falling) begin
-        if (bet_amount < 7'd100)
-            bet_amount <= bet_amount + 1;
-        else
-            bet_amount <= 7'd1;
+    else begin
+        if (key1_falling) begin
+            if (bet_amount < 7'd100)
+                bet_amount <= bet_amount + 1;
+            else
+                bet_amount <= 7'd1;
+        end
+        else if (key2_falling) begin
+            if (bet_amount > 1)
+                bet_amount <= bet_amount - 1;
+            else
+                bet_amount <= 1; 
+        end
     end
 end
 
+
 // PAYOUT ALWAYS BLOCKS
-reg [9:0] payout_reg;  // new register for payout
+reg [9:0] payout_reg;
+reg [3:0] winning_index;
+
 always @(posedge clk or negedge rst) begin
-    if (!rst)
-        payout_reg <= 10'd0;            // reset payout
-    else if (win_flag)
-        payout_reg <= bet_amount * 5;   // update payout only on win
-    else if (spinning)
-        payout_reg <= 10'd0;            // reset payout when spinning starts
+    if (!rst) begin
+        payout_reg    <= 10'd0;
+        winning_index <= 0;
+    end
+    else if (spinning) begin
+        payout_reg    <= 10'd0;
+        winning_index <= 0;
+    end
+    else if (win_flag) begin
+        winning_index <= idx_center;  // all three are equal here
+
+        // ------------------------------
+        // MULTIPLIER LOGIC
+        // ------------------------------
+        case (idx_center)
+
+            // x2 symbols
+            1, 4, 6, 7:
+                payout_reg <= bet_amount * 2;
+
+            // x5 symbols
+            0, 2, 5:
+                payout_reg <= bet_amount * 5;
+
+            // x10 symbols
+            3:
+                payout_reg <= bet_amount * 10;
+
+            // default safety
+            default:
+                payout_reg <= bet_amount;
+        endcase
+    end
 end
+
 
 
 
@@ -434,14 +468,31 @@ wire [3:0] bet_ones = bet_after_h - (bet_tens * 10);
 
 
 // PAYOUT DIGITS
-wire [3:0] p_hundreds =
-    (payout_reg >= 500) ? 5 :
-    (payout_reg >= 400) ? 4 :
-    (payout_reg >= 300) ? 3 :
-    (payout_reg >= 200) ? 2 :
-    (payout_reg >= 100) ? 1 : 0;
+wire [3:0] p_thousands =
+    (payout_reg >= 9000) ? 9 :
+    (payout_reg >= 8000) ? 8 :
+    (payout_reg >= 7000) ? 7 :
+    (payout_reg >= 6000) ? 6 :
+    (payout_reg >= 5000) ? 5 :
+    (payout_reg >= 4000) ? 4 :
+    (payout_reg >= 3000) ? 3 :
+    (payout_reg >= 2000) ? 2 :
+    (payout_reg >= 1000) ? 1 : 0;
 
-wire [9:0] p_after_h = payout_reg - (p_hundreds * 100);
+wire [9:0] p_after_th = payout_reg - (p_thousands * 1000);
+
+wire [3:0] p_hundreds =
+    (p_after_th >= 900) ? 9 :
+    (p_after_th >= 800) ? 8 :
+    (p_after_th >= 700) ? 7 :
+    (p_after_th >= 600) ? 6 :
+    (p_after_th >= 500) ? 5 :
+    (p_after_th >= 400) ? 4 :
+    (p_after_th >= 300) ? 3 :
+    (p_after_th >= 200) ? 2 :
+    (p_after_th >= 100) ? 1 : 0;
+
+wire [9:0] p_after_h = p_after_th - (p_hundreds * 100);
 
 wire [3:0] p_tens = (p_after_h >= 90) ? 9 :
                     (p_after_h >= 80) ? 8 :
@@ -455,8 +506,9 @@ wire [3:0] p_tens = (p_after_h >= 90) ? 9 :
 
 wire [3:0] p_ones = p_after_h - (p_tens * 10);
 
+
 reg [7:0] bet_text [0:6];     
-reg [7:0] pay_text [0:6];     
+reg [7:0] pay_text [0:7];     
 
 always @(*) begin
     bet_text[0] = "B";
@@ -471,9 +523,10 @@ always @(*) begin
 	 pay_text[1] = "A";
 	 pay_text[2] = "Y";
 	 pay_text[3] = " ";
-    pay_text[4] = "0" + p_hundreds;
-    pay_text[5] = "0" + p_tens;
-    pay_text[6] = "0" + p_ones;
+	 pay_text[4] = "0" + p_thousands;
+    pay_text[5] = "0" + p_hundreds;
+    pay_text[6] = "0" + p_tens;
+    pay_text[7] = "0" + p_ones;
     
 end
 
@@ -482,16 +535,11 @@ end
 // INSTANTIATIONS
 
 sprites_rom icons(clk,sprite_addr, sprite_pixel);
-title_rom title(clk, font_ascii, font_row, font_pixel);
+character_rom char(clk, font_ascii, font_row, font_pixel);
 
 lfsr left(clk,rst, rnd_left);
 lfsr center(clk,rst, rnd_center);
 lfsr right(clk,rst, rnd_right);
-
-weighted_picker_fsm w_left(clk,rst,start_left_pick,rnd_left,sym_left,done_left);
-weighted_picker_fsm w_center(clk,rst,start_center_pick,rnd_center,sym_center,done_center);
-weighted_picker_fsm w_right(clk,rst,start_right_pick,rnd_right,sym_right,done_right);
-
 
 // DRAWING LOGIC
 
@@ -504,10 +552,6 @@ always @(*) begin
     char_index  = 0;
     char_x      = 0;
     char_y      = 0;
-
-    addr_left   = 0;
-    addr_center = 0;
-    addr_right  = 0;
 
     if (active_pixels) begin
 
