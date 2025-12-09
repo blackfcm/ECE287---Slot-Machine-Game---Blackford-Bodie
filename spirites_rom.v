@@ -23,7 +23,7 @@ module sprites_rom(
 
 initial begin
     offset = 0;
-    $readmemh("clover_128x128.mem",    memory_array, offset); 
+    $readmemh("clover.mem",    memory_array, offset); 
     offset = offset + CLOVER_SIZE;
 
     $readmemh("watermelon_128x128.mem", memory_array, offset);
@@ -38,10 +38,10 @@ initial begin
     $readmemh("cherry_128.mem",         memory_array, offset);
     offset = offset + CHERRY_SIZE;
 
-    $readmemh("diamond_fixed_24bit.mem", memory_array, offset);
+    $readmemh("diamond2.mem", memory_array, offset);
     offset = offset + DIAMOND_SIZE;
 
-    $readmemh("seven_128x128.mem",      memory_array, offset);
+    $readmemh("seven2.mem",      memory_array, offset);
     offset = offset + SEVEN_SIZE;
 
     $readmemh("orange_128.mem",         memory_array, offset);

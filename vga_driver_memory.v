@@ -88,6 +88,7 @@ module vga_driver_memory	(
 
 );
 
+ // Turn off all displays.
 assign HEX0 = 7'h00;
 assign HEX1 = 7'h00;
 assign HEX2 = 7'h00;
@@ -149,6 +150,16 @@ localparam WIN_LEN = 8;
 localparam WIN_X = (640 - (WIN_LEN * TITLE_W)) / 2;
 localparam WIN_Y = 340;
 
+localparam MULT_SCALE = 2;
+localparam MULT_W = CHAR_W * MULT_SCALE;
+localparam MULT_H = CHAR_H * MULT_SCALE;
+localparam MULT_X = 400;
+localparam MULT_TITLE_Y = CENTER_Y + SPRITE_H + 10;
+localparam MULT_LINE1_Y = MULT_TITLE_Y + MULT_H + 10;
+localparam MULT_LINE2_Y = MULT_LINE1_Y + MULT_H + 5;
+localparam MULT_LINE3_Y = MULT_LINE2_Y + MULT_H + 5;
+
+
 // ROM & FONT SIGNALS
 wire [23:0] sprite_pixel;
 wire [7:0]  font_pixel;
@@ -170,6 +181,30 @@ end
 initial begin
     win_text[0]="Y"; win_text[1]="O"; win_text[2]="U"; win_text[3]=" ";
     win_text[4]="W"; win_text[5]="I"; win_text[6]="N"; win_text[7]="!";
+end
+
+//MULTIPLIER TEXT
+reg [7:0] multi_title [0:10];
+reg [7:0] multi_line1 [0:11];
+reg [7:0] multi_line2 [0:14];
+reg [7:0] multi_line3 [0:6];
+initial begin
+	multi_title[0] ="M"; multi_title[1] ="U"; multi_title[2] ="L"; multi_title[3] ="T"; multi_title[4] ="I"; multi_title[5] ="P"; multi_title[6] ="L";
+	multi_title[7] ="I"; multi_title[8] ="E"; multi_title[9] ="R";multi_title[10] ="Z";
+	//Line 1
+	multi_line1[0] = "2";multi_line1[1] = "x";multi_line1[2] = " ";
+	multi_line1[3] = "F"; multi_line1[4] = "R";multi_line1[5] = "U";multi_line1[6] = "I";multi_line1[7] = "T";multi_line1[8] = "S"; multi_line1[9] = ",";
+	multi_line1[10] = "7";multi_line1[11] = " ";
+	//Line 2
+	multi_line2[0] = "5"; multi_line2[1] = "x"; multi_line2[2] = " "; 
+	multi_line2[3] = "C"; multi_line2[4] = "L"; multi_line2[5] = "V"; multi_line2[6] = ",";
+	multi_line2[7] = "D"; multi_line2[8] = "M"; multi_line2[9] = "D"; multi_line2[10] = ",";
+	multi_line2[11] = "B"; multi_line2[12] = "L"; multi_line2[13] = "L"; multi_line2[14] = " ";
+	//Line 3
+	multi_line3[0] = "1"; multi_line3[1] = "0"; multi_line3[2] = "x"; multi_line3[3] = " "; 
+	multi_line3[4] = "B"; multi_line3[5] = "A"; multi_line3[6] = "R"; 
+
+	
 end
 
 
@@ -250,15 +285,23 @@ always @(posedge clk or negedge rst) begin
             end
 
             S_SPIN: begin
-                if (tickA_pulse) idx_left   <= rnd_left[2:0];
+					 
+					 if (tickA_pulse) idx_left   <= rnd_left[2:0];
                 if (tickB_pulse) idx_center <= rnd_center[2:0];
                 if (tickC_pulse) idx_right  <= rnd_right[2:0];
+					 
 
                 if (tickB_pulse)
                     stop_counter <= stop_counter + 1;
 
                 if (stop_counter >= MAX_TICKS) begin
                     spinning <= 0;
+						  
+						  if (SW[1]) begin
+								idx_center <= idx_left;
+								idx_right <= idx_left;
+						  end
+						  
                     S <= S_EVAL;
                 end
             end
@@ -277,8 +320,9 @@ always @(posedge clk or negedge rst) begin
 end
 
 
-// BET + PAYOUT SIGNALS, KEY ASSIGNS, LOGIC
+// BET + BET Lock + PAYOUT SIGNALS, KEY ASSIGNS, LOGIC
 reg [6:0] bet_amount;
+reg bet_locked;
 reg key1_prev_reg, key2_prev_reg;
 
 always @(posedge clk or negedge rst) begin
@@ -295,14 +339,25 @@ wire key2_falling = key2_prev_reg & ~KEY[2];
 
 always @(posedge clk or negedge rst) begin
     if (!rst)
+        bet_locked <= 0;
+    else
+        bet_locked <= SW[2];
+end
+
+always @(posedge clk or negedge rst) begin
+    if (!rst)
         bet_amount <= 1;
     else begin
-        if (key1_falling)
-            bet_amount <= (bet_amount < 100) ? bet_amount + 1 : 1;
-        else if (key2_falling)
-            bet_amount <= (bet_amount > 1) ? bet_amount - 1 : 1;
+        
+        if (!bet_locked) begin
+            if (key1_falling)
+                bet_amount <= (bet_amount < 100) ? bet_amount + 1 : 1;
+            else if (key2_falling)
+                bet_amount <= (bet_amount > 1) ? bet_amount - 1 : 1;
+        end
     end
 end
+
 
 reg [9:0] payout_reg;
 reg [3:0] winning_index;
@@ -525,6 +580,71 @@ always @(*) begin
 
             if (font_pixel[7-char_x])
                 vga_color = 24'h00FF00;
+        end
+		  
+		  //MULTIPLIER TITLE
+		  
+		  else if (!win_flag &&
+		           x>=MULT_X && x<MULT_X+11*MULT_W &&
+                 y>=MULT_TITLE_Y && y<MULT_TITLE_Y+MULT_H)
+        begin
+            char_index = (x-MULT_X)/MULT_W;
+            char_x     = ((x-MULT_X)%MULT_W)/MULT_SCALE;
+            char_y     = ((y-MULT_TITLE_Y)%MULT_H)/MULT_SCALE;
+
+            font_ascii = (char_index<11) ? multi_title[char_index] : 8'h20;
+            font_row = char_y[2:0];
+
+            if (font_pixel[7-char_x])
+                vga_color = 24'hFFFFFF;
+        end
+
+        // MULTIPLIERS LINE 1 (2x)
+        else if (!win_flag &&
+		           x>=MULT_X && x<MULT_X+12*MULT_W &&
+                 y>=MULT_LINE1_Y && y<MULT_LINE1_Y+MULT_H)
+        begin
+            char_index = (x-MULT_X)/MULT_W;
+            char_x     = ((x-MULT_X)%MULT_W)/MULT_SCALE;
+            char_y     = ((y-MULT_LINE1_Y)%MULT_H)/MULT_SCALE;
+
+            font_ascii = (char_index<12) ? multi_line1[char_index] : 8'h20;
+            font_row = char_y[2:0];
+
+            if (font_pixel[7-char_x])
+                vga_color = 24'hFFFF00;
+        end
+
+        // MULTIPLIERS LINE 2 (5x)
+        else if (!win_flag &&
+		           x>=MULT_X && x<MULT_X+15*MULT_W &&
+                 y>=MULT_LINE2_Y && y<MULT_LINE2_Y+MULT_H)
+        begin
+            char_index = (x-MULT_X)/MULT_W;
+            char_x     = ((x-MULT_X)%MULT_W)/MULT_SCALE;
+            char_y     = ((y-MULT_LINE2_Y)%MULT_H)/MULT_SCALE;
+
+            font_ascii = (char_index<15) ? multi_line2[char_index] : 8'h20;
+            font_row = char_y[2:0];
+
+            if (font_pixel[7-char_x])
+                vga_color = 24'h00FFFF;
+        end
+
+        // MULTIPLIERS LINE 3 (10x)
+        else if (!win_flag &&
+		           x>=MULT_X && x<MULT_X+7*MULT_W &&
+                 y>=MULT_LINE3_Y && y<MULT_LINE3_Y+MULT_H)
+        begin
+            char_index = (x-MULT_X)/MULT_W;
+            char_x     = ((x-MULT_X)%MULT_W)/MULT_SCALE;
+            char_y     = ((y-MULT_LINE3_Y)%MULT_H)/MULT_SCALE;
+
+            font_ascii = (char_index<7) ? multi_line3[char_index] : 8'h20;
+            font_row = char_y[2:0];
+
+            if (font_pixel[7-char_x])
+                vga_color = 24'hFF00FF;
         end
     end
 end
